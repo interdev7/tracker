@@ -12,8 +12,10 @@ class TrackerProvider extends ChangeNotifier {
   Timer? _gpsTimer;
   Position? _lastPosition;
   TripState _state;
-  final List<Position> _recentPositions = [];
-  bool _isProcessingGPS = false;
+  static const int _maxRecentSpeeds = 5; // Buffer size for speed averaging
+  static const double _movementThreshold = 2.0; // km/h
+  static const double _minAcceptableAccuracy = 20.0; // meters
+  static const double _minSpeedAccuracy = 3.0; // m/s
 
   TrackerProvider(this._repository) : _state = TripState();
 
@@ -24,6 +26,7 @@ class TrackerProvider extends ChangeNotifier {
   bool get isTracking => _state.isTracking;
   bool get isMoving => _state.isMoving;
   double get currentSpeed => _state.currentSpeed;
+  double get averageSpeed => _state.averageSpeed;
 
   String _formatDuration(int seconds) {
     final minutes = seconds ~/ 60;
@@ -98,8 +101,8 @@ class TrackerProvider extends ChangeNotifier {
       isTracking: true,
       isMoving: false,
       startTime: DateTime.now(),
+      recentSpeeds: [],
     );
-    _recentPositions.clear();
     await _repository.saveTripState(_state);
     _startTracking();
     notifyListeners();
@@ -112,10 +115,10 @@ class TrackerProvider extends ChangeNotifier {
     _timer = null;
     _gpsTimer = null;
     _lastPosition = null;
-    _recentPositions.clear();
     _state = _state.copyWith(
       isTracking: false,
       isMoving: false,
+      recentSpeeds: [],
     );
     await _repository.saveTripState(_state);
     notifyListeners();
@@ -128,123 +131,140 @@ class TrackerProvider extends ChangeNotifier {
     _timer = null;
     _gpsTimer = null;
     _lastPosition = null;
-    _recentPositions.clear();
     _state = TripState();
     await _repository.clearTripState();
     notifyListeners();
   }
 
   void _startTracking() {
-    // Таймер для обновления времени каждую секунду
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+    // Настройка для получения GPS данных в реальном времени
+    const locationSettings = LocationSettings(
+      accuracy: LocationAccuracy.bestForNavigation,
+      distanceFilter: 0,
+    );
+
+    // Подписываемся на поток GPS данных
+    Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+      (Position? position) async {
+        if (!_state.isTracking || position == null) return;
+
+        try {
+          final now = DateTime.now();
+          double speedKmH = position.speed * 3.6; // Convert m/s to km/h
+
+          // Немедленная проверка скорости
+          if (speedKmH < _movementThreshold) {
+            _state = _state.copyWith(
+              isMoving: false,
+              currentSpeed: speedKmH,
+              speedAccuracy: position.speedAccuracy,
+              locationAccuracy: position.accuracy,
+              lastUpdateTime: now,
+            );
+            await _repository.saveTripState(_state);
+            notifyListeners();
+            return;
+          }
+
+          // Update recent speeds buffer
+          List<double> updatedSpeeds = List<double>.from(_state.recentSpeeds);
+          updatedSpeeds.add(speedKmH);
+          if (updatedSpeeds.length > _maxRecentSpeeds) {
+            updatedSpeeds.removeAt(0);
+          }
+
+          // Проверяем точность GPS
+          bool isAccurate = position.accuracy <= _minAcceptableAccuracy && position.speedAccuracy <= _minSpeedAccuracy;
+
+          // Рассчитываем среднюю скорость для более плавного обнаружения движения
+          double avgSpeed = updatedSpeeds.isEmpty ? speedKmH : updatedSpeeds.reduce((a, b) => a + b) / updatedSpeeds.length;
+
+          // Определяем, движемся ли на основе средней скорости и точности
+          bool isMovingNow = isAccurate && avgSpeed >= _movementThreshold;
+
+          double distanceIncrement = 0.0;
+          if (_lastPosition != null && isMovingNow) {
+            // Calculate distance only if we're confident about movement
+            distanceIncrement = Geolocator.distanceBetween(
+                  _lastPosition!.latitude,
+                  _lastPosition!.longitude,
+                  position.latitude,
+                  position.longitude,
+                ) /
+                1000; // Convert to kilometers
+
+            // Validate distance increment
+            if (distanceIncrement > 0.1) {
+              // More than 100m
+              // If distance seems too large, validate with speed
+              double timeSeconds = now.difference(_lastPosition!.timestamp).inSeconds.toDouble();
+              double expectedDistance = (_lastPosition!.speed * timeSeconds) / 1000;
+              if (distanceIncrement > expectedDistance * 1.5) {
+                // Distance increment seems invalid, adjust it
+                distanceIncrement = expectedDistance;
+              }
+            }
+          }
+
+          // Update state with new values
+          _state = _state.copyWith(
+            distanceKm: _state.distanceKm + (isMovingNow ? distanceIncrement : 0),
+            isMoving: isMovingNow,
+            currentSpeed: speedKmH,
+            speedAccuracy: position.speedAccuracy,
+            locationAccuracy: position.accuracy,
+            lastUpdateTime: now,
+            recentSpeeds: updatedSpeeds,
+          );
+
+          _lastPosition = position;
+          await _repository.saveTripState(_state);
+
+          log('''
+              #########################################################
+              Speed: ${speedKmH.toStringAsFixed(1)} км/ч
+              Avg Speed: ${avgSpeed.toStringAsFixed(1)} км/ч
+              Distance: ${_state.distanceKm.toStringAsFixed(2)} км
+              GPS Accuracy: ${position.accuracy.toStringAsFixed(1)}m
+              Speed Accuracy: ${position.speedAccuracy.toStringAsFixed(1)}m/s
+              Is Moving: ${_state.isMoving}
+              Is Accurate: $isAccurate
+              #########################################################
+              ''');
+
+          notifyListeners();
+        } catch (e) {
+          debugPrint('Error processing location: $e');
+        }
+      },
+      onError: (error) {
+        debugPrint('Location subscription error: $error');
+      },
+    );
+
+    // Таймер для обновления времени
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) async {
       if (!_state.isTracking) return;
 
-      if (_state.isMoving) {
+      final now = DateTime.now();
+      final lastUpdate = _state.lastUpdateTime ?? now;
+
+      // Проверяем, не устарели ли данные GPS
+      final isGpsStale = now.difference(lastUpdate).inSeconds > 5;
+
+      if (_state.isMoving && !isGpsStale) {
         _state = _state.copyWith(
           tripTimeSeconds: _state.tripTimeSeconds + 1,
         );
       } else {
         _state = _state.copyWith(
           waitingTimeSeconds: _state.waitingTimeSeconds + 1,
+          isMoving: false, // Reset movement state if GPS is stale
         );
       }
+
+      await _repository.saveTripState(_state);
       notifyListeners();
-    });
-
-    // Отдельный таймер для обработки GPS
-    _gpsTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
-      if (!_state.isTracking || _isProcessingGPS) return;
-
-      _isProcessingGPS = true;
-      try {
-        final currentPosition = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-        );
-
-        // Add current position to recent positions list
-        _recentPositions.add(currentPosition);
-
-        // Keep only the last N seconds of positions
-        while (_recentPositions.length > Tariffs.locationAveragingSeconds) {
-          _recentPositions.removeAt(0);
-        }
-
-        // Get averaged position
-        final position = _getAveragePosition(_recentPositions);
-
-        // Calculate speed and distance only if we have a previous position
-        if (_lastPosition != null) {
-          final distance = Geolocator.distanceBetween(
-            _lastPosition!.latitude,
-            _lastPosition!.longitude,
-            position.latitude,
-            position.longitude,
-          );
-
-          // Calculate current speed in km/h
-          final speedMS = distance / 1.0; // speed in m/s
-          final speedKmH = speedMS * 3.6; // convert to km/h
-
-          // Only process movement if distance is above minimum threshold
-          if (distance >= Tariffs.minDistanceThreshold) {
-            if (speedMS > Tariffs.minSpeedThreshold) {
-              // Moving
-              _state = _state.copyWith(
-                distanceKm: _state.distanceKm + (distance / 1000), // Convert to kilometers
-                isMoving: true,
-                currentSpeed: speedKmH,
-              );
-            } else {
-              // Speed below threshold - waiting
-              _state = _state.copyWith(
-                isMoving: false,
-                currentSpeed: 0.0,
-              );
-            }
-            _lastPosition = position;
-          } else {
-            // Distance below threshold - definitely waiting
-            _state = _state.copyWith(
-              isMoving: false,
-              currentSpeed: 0.0,
-            );
-          }
-        } else {
-          // First position
-          _lastPosition = position;
-          _state = _state.copyWith(currentSpeed: 0.0);
-        }
-
-        await _repository.saveTripState(_state);
-        log('''
-        #########################################################
-
-
-
-        Position: ${position.toString()}
-        Speed: ${_formatSpeed(_state.currentSpeed)}
-        Distance: ${_state.distanceKm.toStringAsFixed(2)} км или ${(_state.distanceKm * 1000).toStringAsFixed(0)} м
-        Current point distance: ${_lastPosition != null ? Geolocator.distanceBetween(
-                _lastPosition!.latitude,
-                _lastPosition!.longitude,
-                position.latitude,
-                position.longitude,
-              ).toStringAsFixed(2) : '0.00'} м
-        Trip time: ${_formatDuration(_state.tripTimeSeconds)}
-        Waiting time: ${_formatDuration(_state.waitingTimeSeconds)}
-        IsTracking: ${_state.isTracking}
-        IsMoving: ${_state.isMoving}
-
-
-
-        #########################################################
-        ''');
-        notifyListeners();
-      } catch (e) {
-        debugPrint('Error tracking location: $e');
-      } finally {
-        _isProcessingGPS = false;
-      }
     });
   }
 

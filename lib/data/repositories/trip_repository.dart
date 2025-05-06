@@ -14,7 +14,13 @@ class TripRepository {
       'tripTimeSeconds': state.tripTimeSeconds,
       'waitingTimeSeconds': state.waitingTimeSeconds,
       'isTracking': state.isTracking,
+      'isMoving': state.isMoving,
+      'currentSpeed': state.currentSpeed,
       'startTime': state.startTime?.toIso8601String(),
+      'speedAccuracy': state.speedAccuracy,
+      'locationAccuracy': state.locationAccuracy,
+      'lastUpdateTime': state.lastUpdateTime?.toIso8601String(),
+      'recentSpeeds': state.recentSpeeds,
     };
     await _prefs.setString(_tripStateKey, jsonEncode(stateMap));
   }
@@ -25,11 +31,17 @@ class TripRepository {
 
     final stateMap = jsonDecode(stateJson) as Map<String, dynamic>;
     return TripState(
-      distanceKm: stateMap['distanceKm'] as double,
-      tripTimeSeconds: stateMap['tripTimeSeconds'] as int,
-      waitingTimeSeconds: stateMap['waitingTimeSeconds'] as int,
-      isTracking: stateMap['isTracking'] as bool,
+      distanceKm: (stateMap['distanceKm'] ?? 0.0) as double,
+      tripTimeSeconds: (stateMap['tripTimeSeconds'] ?? 0) as int,
+      waitingTimeSeconds: (stateMap['waitingTimeSeconds'] ?? 0) as int,
+      isTracking: (stateMap['isTracking'] ?? false) as bool,
+      isMoving: (stateMap['isMoving'] ?? false) as bool,
+      currentSpeed: (stateMap['currentSpeed'] ?? 0.0) as double,
       startTime: stateMap['startTime'] != null ? DateTime.parse(stateMap['startTime'] as String) : null,
+      speedAccuracy: stateMap['speedAccuracy'] as double? ?? 0.0,
+      locationAccuracy: stateMap['locationAccuracy'] as double? ?? 0.0,
+      lastUpdateTime: stateMap['lastUpdateTime'] != null ? DateTime.parse(stateMap['lastUpdateTime'] as String) : null,
+      recentSpeeds: (stateMap['recentSpeeds'] as List<dynamic>?)?.cast<double>() ?? const [],
     );
   }
 

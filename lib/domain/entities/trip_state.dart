@@ -8,6 +8,10 @@ class TripState extends Equatable {
   final bool isMoving;
   final double currentSpeed; // Speed in km/h
   final DateTime? startTime;
+  final double speedAccuracy; // GPS speed accuracy
+  final double locationAccuracy; // GPS location accuracy
+  final DateTime? lastUpdateTime; // Last GPS update time
+  final List<double> recentSpeeds; // Buffer for recent speed values
 
   const TripState({
     this.distanceKm = 0.0,
@@ -17,6 +21,10 @@ class TripState extends Equatable {
     this.isMoving = false,
     this.currentSpeed = 0.0,
     this.startTime,
+    this.speedAccuracy = 0.0,
+    this.locationAccuracy = 0.0,
+    this.lastUpdateTime,
+    this.recentSpeeds = const [],
   });
 
   TripState copyWith({
@@ -27,6 +35,10 @@ class TripState extends Equatable {
     bool? isMoving,
     double? currentSpeed,
     DateTime? startTime,
+    double? speedAccuracy,
+    double? locationAccuracy,
+    DateTime? lastUpdateTime,
+    List<double>? recentSpeeds,
   }) {
     return TripState(
       distanceKm: distanceKm ?? this.distanceKm,
@@ -36,7 +48,22 @@ class TripState extends Equatable {
       isMoving: isMoving ?? this.isMoving,
       currentSpeed: currentSpeed ?? this.currentSpeed,
       startTime: startTime ?? this.startTime,
+      speedAccuracy: speedAccuracy ?? this.speedAccuracy,
+      locationAccuracy: locationAccuracy ?? this.locationAccuracy,
+      lastUpdateTime: lastUpdateTime ?? this.lastUpdateTime,
+      recentSpeeds: recentSpeeds ?? this.recentSpeeds,
     );
+  }
+
+  // Calculate average speed from recent measurements
+  double get averageSpeed {
+    if (recentSpeeds.isEmpty) return 0.0;
+    return recentSpeeds.reduce((a, b) => a + b) / recentSpeeds.length;
+  }
+
+  // Check if GPS data is accurate enough
+  bool get isGpsAccurate {
+    return speedAccuracy <= 1.0 && locationAccuracy <= 10.0;
   }
 
   @override
@@ -48,5 +75,9 @@ class TripState extends Equatable {
         isMoving,
         currentSpeed,
         startTime,
+        speedAccuracy,
+        locationAccuracy,
+        lastUpdateTime,
+        recentSpeeds,
       ];
 }

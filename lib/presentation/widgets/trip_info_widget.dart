@@ -2,6 +2,7 @@ import 'dart:developer';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:tracker/core/constants/tariffs.dart';
 import '../providers/tracker_provider.dart';
 import '../../domain/services/price_calculator.dart';
 
@@ -9,9 +10,13 @@ class TripInfoWidget extends StatelessWidget {
   const TripInfoWidget({super.key});
 
   String _formatDuration(int seconds) {
-    final minutes = seconds ~/ 60;
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
     final remainingSeconds = seconds % 60;
-    return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
+
+    return hours > 0
+        ? '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}'
+        : '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -57,7 +62,7 @@ class TripInfoWidget extends StatelessWidget {
                           const SizedBox(width: 8),
                           Text(
                             '(${tracker.currentSpeed.toStringAsFixed(1)} км/ч)',
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: Colors.green,
                               fontWeight: FontWeight.w500,
                             ),
@@ -71,7 +76,7 @@ class TripInfoWidget extends StatelessWidget {
                 _InfoRow(
                   icon: Icons.speed,
                   label: 'Скорость',
-                  value: '${tracker.currentSpeed.toStringAsFixed(1)} км/ч',
+                  value: '${tracker.currentSpeed.toStringAsFixed(1)} км/ч  ${(tracker.currentSpeed * 3.6).toStringAsFixed(1)} м/ч',
                 ),
                 const SizedBox(height: 12),
                 _InfoRow(
@@ -93,9 +98,14 @@ class TripInfoWidget extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 _InfoRow(
-                  icon: Icons.money,
+                  icon: Icons.local_atm,
+                  label: 'Стоимость подачи',
+                  value: Tariffs.basePrice.toStringAsFixed(2),
+                ),
+                _InfoRow(
+                  icon: Icons.local_atm,
                   label: 'Стоимость',
-                  value: '${price.toStringAsFixed(2)} ₼',
+                  value: '${price.toStringAsFixed(2)} ТМТ',
                 ),
                 const SizedBox(height: 16),
                 Row(

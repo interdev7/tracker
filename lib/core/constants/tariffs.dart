@@ -10,7 +10,7 @@ class Tariffs {
   static const int workDayEndHour = 14; // Рабочий день заканчивается в 14:00
 
   // Movement detection thresholds
-  static const double minSpeedThreshold = 1.0; // Минимальная скорость в м/с (примерно 3.6 км/ч)
-  static const double minDistanceThreshold = 5.0; // Минимальное расстояние между точками в метрах
-  static const int locationAveragingSeconds = 3; // Число секунд для усреднения данных о местоположении
+  static const double minSpeedThreshold = 1.0; // Минимальная скорость в м/с (3.6 км/ч)
+  static const double minDistanceThreshold = 2.0; // Минимальное расстояние между точками в метрах
+  static const int locationAveragingSeconds = 2; // Число секунд для усреднения данных о местоположении
 }
