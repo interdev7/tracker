@@ -4,9 +4,15 @@ import '../../domain/entities/trip_state.dart';
 
 class TripRepository {
   static const String _tripStateKey = 'trip_state';
-  final SharedPreferences _prefs;
+  SharedPreferences? _prefs;
 
-  TripRepository(this._prefs);
+  TripRepository() {
+    _init();
+  }
+
+  Future<void> _init() async {
+    _prefs = await SharedPreferences.getInstance();
+  }
 
   Future<void> saveTripState(TripState state) async {
     final stateMap = {
@@ -22,11 +28,11 @@ class TripRepository {
       'lastUpdateTime': state.lastUpdateTime?.toIso8601String(),
       'recentSpeeds': state.recentSpeeds,
     };
-    await _prefs.setString(_tripStateKey, jsonEncode(stateMap));
+    await _prefs?.setString(_tripStateKey, jsonEncode(stateMap));
   }
 
   TripState? loadTripState() {
-    final stateJson = _prefs.getString(_tripStateKey);
+    final stateJson = _prefs?.getString(_tripStateKey);
     if (stateJson == null) return null;
 
     final stateMap = jsonDecode(stateJson) as Map<String, dynamic>;
@@ -46,6 +52,6 @@ class TripRepository {
   }
 
   Future<void> clearTripState() async {
-    await _prefs.remove(_tripStateKey);
+    await _prefs?.remove(_tripStateKey);
   }
 }

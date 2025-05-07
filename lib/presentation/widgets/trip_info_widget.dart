@@ -1,10 +1,8 @@
-import 'dart:developer';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:tracker/core/constants/tariffs.dart';
-import '../providers/tracker_provider.dart';
+
 import '../../domain/services/price_calculator.dart';
+import '../providers/tracker_provider.dart';
 
 class TripInfoWidget extends StatelessWidget {
   const TripInfoWidget({super.key});
@@ -27,6 +25,7 @@ class TripInfoWidget extends StatelessWidget {
           distanceKm: tracker.distanceKm,
           waitingTimeSeconds: tracker.waitingTime,
           startTime: null, // We'll calculate without time-based pricing in the UI
+          properties: tracker.properties,
         );
 
         return Card(
@@ -34,6 +33,7 @@ class TripInfoWidget extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (tracker.isTracking) ...[
@@ -76,7 +76,7 @@ class TripInfoWidget extends StatelessWidget {
                 _InfoRow(
                   icon: Icons.speed,
                   label: 'Скорость',
-                  value: '${tracker.currentSpeed.toStringAsFixed(1)} км/ч  ${(tracker.currentSpeed * 3.6).toStringAsFixed(1)} м/ч',
+                  value: '${tracker.currentSpeed.toStringAsFixed(1)} км/ч  ${(tracker.currentSpeed * 3.6).toStringAsFixed(1)} м/с',
                 ),
                 const SizedBox(height: 12),
                 _InfoRow(
@@ -96,16 +96,24 @@ class TripInfoWidget extends StatelessWidget {
                   label: 'Время ожидания',
                   value: _formatDuration(tracker.waitingTime),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 18),
+                const Text(
+                  "Стоимость поездки:",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 7),
                 _InfoRow(
                   icon: Icons.local_atm,
-                  label: 'Стоимость подачи',
-                  value: Tariffs.basePrice.toStringAsFixed(2),
+                  label: 'Подача',
+                  value: "${tracker.properties.basePrice.toStringAsFixed(2)} ${tracker.properties.currency}",
                 ),
                 _InfoRow(
                   icon: Icons.local_atm,
-                  label: 'Стоимость',
-                  value: '${price.toStringAsFixed(2)} ТМТ',
+                  label: 'Минимальная стоимость',
+                  value: '${tracker.properties.minimumTripPrice.toStringAsFixed(2)} ${tracker.properties.currency}',
                 ),
                 const SizedBox(height: 16),
                 Row(
@@ -157,7 +165,7 @@ class _InfoRow extends StatelessWidget {
     return Row(
       children: [
         Icon(icon, size: 24),
-        const SizedBox(width: 12),
+        const SizedBox(width: 5),
         Text(
           label,
           style: const TextStyle(
@@ -169,8 +177,8 @@ class _InfoRow extends StatelessWidget {
         Text(
           value,
           style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
+            fontSize: 19,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ],

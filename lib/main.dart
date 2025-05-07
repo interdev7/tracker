@@ -1,20 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'data/repositories/trip_repository.dart';
+
 import 'presentation/providers/tracker_provider.dart';
 import 'presentation/widgets/trip_info_widget.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final prefs = await SharedPreferences.getInstance();
-  final repository = TripRepository(prefs);
 
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(
-          create: (_) => TrackerProvider(repository)..initialize(),
+          create: (_) => TrackerProvider()..initialize(),
+          lazy: true,
         ),
       ],
       child: const MyApp(),

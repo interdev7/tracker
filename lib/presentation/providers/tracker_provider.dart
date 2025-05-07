@@ -2,22 +2,26 @@ import 'dart:async';
 import 'dart:developer';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
-import '../../core/constants/tariffs.dart';
 import '../../data/repositories/trip_repository.dart';
 import '../../domain/entities/trip_state.dart';
+import '../../core/constants/tracker_properties.dart';
 
 class TrackerProvider extends ChangeNotifier {
+  /// Репозиторий для сохранения и загрузки состояния поездки
   final TripRepository _repository;
+
+  /// Контроллер для расчета стоимости поездки
+  TrackerProperties _properties;
+
   Timer? _timer;
   Timer? _gpsTimer;
   Position? _lastPosition;
   TripState _state;
-  static const int _maxRecentSpeeds = 5; // Buffer size for speed averaging
-  static const double _movementThreshold = 2.0; // km/h
-  static const double _minAcceptableAccuracy = 20.0; // meters
-  static const double _minSpeedAccuracy = 3.0; // m/s
 
-  TrackerProvider(this._repository) : _state = TripState();
+  TrackerProvider({TripRepository? repository, TrackerProperties? properties})
+      : _repository = repository ?? TripRepository(),
+        _properties = properties ?? const TrackerProperties(),
+        _state = const TripState();
 
   // Getters
   double get distanceKm => _state.distanceKm;
@@ -28,52 +32,11 @@ class TrackerProvider extends ChangeNotifier {
   double get currentSpeed => _state.currentSpeed;
   double get averageSpeed => _state.averageSpeed;
 
-  String _formatDuration(int seconds) {
-    final minutes = seconds ~/ 60;
-    final remainingSeconds = seconds % 60;
-    return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
-  }
+  TrackerProperties get properties => _properties;
 
-  String _formatSpeed(double speedKmH) {
-    return '${speedKmH.toStringAsFixed(1)} км/ч';
-  }
-
-  Position _getAveragePosition(List<Position> positions) {
-    if (positions.isEmpty) {
-      throw Exception('No positions to average');
-    }
-    if (positions.length == 1) {
-      return positions.first;
-    }
-
-    double sumLat = 0;
-    double sumLng = 0;
-    double sumAlt = 0;
-    double sumSpeed = 0;
-    double sumAccuracy = 0;
-    double sumSpeedAccuracy = 0;
-
-    for (var position in positions) {
-      sumLat += position.latitude;
-      sumLng += position.longitude;
-      sumAlt += position.altitude;
-      sumSpeed += position.speed;
-      sumAccuracy += position.accuracy;
-      sumSpeedAccuracy += position.speedAccuracy;
-    }
-
-    return Position(
-      latitude: sumLat / positions.length,
-      longitude: sumLng / positions.length,
-      timestamp: positions.last.timestamp,
-      accuracy: sumAccuracy / positions.length,
-      altitude: sumAlt / positions.length,
-      heading: positions.last.heading,
-      speed: sumSpeed / positions.length,
-      speedAccuracy: sumSpeedAccuracy / positions.length,
-      altitudeAccuracy: positions.last.altitudeAccuracy,
-      headingAccuracy: positions.last.headingAccuracy,
-    );
+  void setProperties(TrackerProperties properties) {
+    _properties = properties;
+    notifyListeners();
   }
 
   // Initialize tracking
@@ -131,7 +94,7 @@ class TrackerProvider extends ChangeNotifier {
     _timer = null;
     _gpsTimer = null;
     _lastPosition = null;
-    _state = TripState();
+    _state = const TripState();
     await _repository.clearTripState();
     notifyListeners();
   }
@@ -153,7 +116,7 @@ class TrackerProvider extends ChangeNotifier {
           double speedKmH = position.speed * 3.6; // Convert m/s to km/h
 
           // Немедленная проверка скорости
-          if (speedKmH < _movementThreshold) {
+          if (speedKmH < _properties.movementThreshold) {
             _state = _state.copyWith(
               isMoving: false,
               currentSpeed: speedKmH,
@@ -169,18 +132,18 @@ class TrackerProvider extends ChangeNotifier {
           // Update recent speeds buffer
           List<double> updatedSpeeds = List<double>.from(_state.recentSpeeds);
           updatedSpeeds.add(speedKmH);
-          if (updatedSpeeds.length > _maxRecentSpeeds) {
+          if (updatedSpeeds.length > _properties.maxRecentSpeeds) {
             updatedSpeeds.removeAt(0);
           }
 
           // Проверяем точность GPS
-          bool isAccurate = position.accuracy <= _minAcceptableAccuracy && position.speedAccuracy <= _minSpeedAccuracy;
+          bool isAccurate = position.accuracy <= _properties.minAcceptableAccuracy && position.speedAccuracy <= _properties.minSpeedAccuracy;
 
           // Рассчитываем среднюю скорость для более плавного обнаружения движения
           double avgSpeed = updatedSpeeds.isEmpty ? speedKmH : updatedSpeeds.reduce((a, b) => a + b) / updatedSpeeds.length;
 
           // Определяем, движемся ли на основе средней скорости и точности
-          bool isMovingNow = isAccurate && avgSpeed >= _movementThreshold;
+          bool isMovingNow = isAccurate && avgSpeed >= _properties.movementThreshold;
 
           double distanceIncrement = 0.0;
           if (_lastPosition != null && isMovingNow) {
