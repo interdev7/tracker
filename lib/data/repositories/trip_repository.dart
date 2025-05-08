@@ -6,12 +6,11 @@ class TripRepository {
   static const String _tripStateKey = 'trip_state';
   SharedPreferences? _prefs;
 
-  TripRepository() {
-    _init();
-  }
+  TripRepository();
 
-  Future<void> _init() async {
+  Future<SharedPreferences?> init() async {
     _prefs = await SharedPreferences.getInstance();
+    return _prefs;
   }
 
   Future<void> saveTripState(TripState state) async {
@@ -19,6 +18,7 @@ class TripRepository {
       'distanceKm': state.distanceKm,
       'tripTimeSeconds': state.tripTimeSeconds,
       'waitingTimeSeconds': state.waitingTimeSeconds,
+      'availableWaitingTime': state.availableWaitingTime,
       'isTracking': state.isTracking,
       'isMoving': state.isMoving,
       'currentSpeed': state.currentSpeed,
@@ -40,6 +40,7 @@ class TripRepository {
       distanceKm: (stateMap['distanceKm'] ?? 0.0) as double,
       tripTimeSeconds: (stateMap['tripTimeSeconds'] ?? 0) as int,
       waitingTimeSeconds: (stateMap['waitingTimeSeconds'] ?? 0) as int,
+      availableWaitingTime: (stateMap['availableWaitingTime'] ?? 2) as int,
       isTracking: (stateMap['isTracking'] ?? false) as bool,
       isMoving: (stateMap['isMoving'] ?? false) as bool,
       currentSpeed: (stateMap['currentSpeed'] ?? 0.0) as double,

@@ -1,21 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:tracker/core/utils/utils.dart';
 
 import '../../domain/services/price_calculator.dart';
 import '../providers/tracker_provider.dart';
 
 class TripInfoWidget extends StatelessWidget {
   const TripInfoWidget({super.key});
-
-  String _formatDuration(int seconds) {
-    final hours = seconds ~/ 3600;
-    final minutes = (seconds % 3600) ~/ 60;
-    final remainingSeconds = seconds % 60;
-
-    return hours > 0
-        ? '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}'
-        : '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,6 +18,7 @@ class TripInfoWidget extends StatelessWidget {
           startTime: null, // We'll calculate without time-based pricing in the UI
           properties: tracker.properties,
         );
+        // final hasFreeWaitingTime = tracker.waitingTime < tracker.properties.freeWaitingMinutes;
 
         return Card(
           margin: const EdgeInsets.all(16),
@@ -36,43 +28,68 @@ class TripInfoWidget extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (tracker.isTracking) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: tracker.isMoving ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          tracker.isMoving ? Icons.directions_car : Icons.timer,
-                          color: tracker.isMoving ? Colors.green : Colors.orange,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          tracker.isMoving ? 'В движении' : 'Ожидание',
-                          style: TextStyle(
-                            color: tracker.isMoving ? Colors.green : Colors.orange,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        if (tracker.isMoving) ...[
-                          const SizedBox(width: 8),
-                          Text(
-                            '(${tracker.currentSpeed.toStringAsFixed(1)} км/ч)',
-                            style: const TextStyle(
-                              color: Colors.green,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ],
+                const Center(
+                  child: Text(
+                    'Общее время в пути',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 16),
-                ],
+                ),
+                const SizedBox(height: 12),
+                Center(
+                  child: Text(
+                    formatDuration(tracker.commonTime),
+                    style: const TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: tracker.isTracking
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: tracker.isMoving ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                tracker.isMoving ? Icons.directions_car : Icons.timer,
+                                color: tracker.isMoving ? Colors.green : Colors.orange,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                tracker.isMoving ? 'В движении' : 'Ожидание',
+                                style: TextStyle(
+                                  color: tracker.isMoving ? Colors.green : Colors.orange,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 20,
+                                ),
+                              ),
+                              if (tracker.isMoving) ...[
+                                const SizedBox(width: 8),
+                                Text(
+                                  '(${tracker.currentSpeed.toStringAsFixed(1)} км/ч)',
+                                  style: const TextStyle(
+                                    color: Colors.green,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+                const SizedBox(height: 16),
                 _InfoRow(
                   icon: Icons.speed,
                   label: 'Скорость',
@@ -88,13 +105,14 @@ class TripInfoWidget extends StatelessWidget {
                 _InfoRow(
                   icon: Icons.directions_car,
                   label: 'Время в пути',
-                  value: _formatDuration(tracker.tripTime),
+                  value: formatDuration(tracker.tripTime),
                 ),
                 const SizedBox(height: 12),
                 _InfoRow(
                   icon: Icons.timer,
                   label: 'Время ожидания',
-                  value: _formatDuration(tracker.waitingTime),
+                  color: tracker.hasFreeWaitingTime ? Colors.green : Colors.red,
+                  value: formatDuration(tracker.waitingTime),
                 ),
                 const SizedBox(height: 18),
                 const Text(
@@ -109,6 +127,11 @@ class TripInfoWidget extends StatelessWidget {
                   icon: Icons.local_atm,
                   label: 'Подача',
                   value: "${tracker.properties.basePrice.toStringAsFixed(2)} ${tracker.properties.currency}",
+                ),
+                _InfoRow(
+                  icon: Icons.local_atm,
+                  label: 'Насчитанная сумма',
+                  value: '${price.movingPrice.toStringAsFixed(2)} ${tracker.properties.currency}',
                 ),
                 _InfoRow(
                   icon: Icons.local_atm,
@@ -153,11 +176,13 @@ class _InfoRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
+  final Color? color;
 
   const _InfoRow({
     required this.icon,
     required this.label,
     required this.value,
+    this.color,
   });
 
   @override
@@ -176,9 +201,10 @@ class _InfoRow extends StatelessWidget {
         const Spacer(),
         Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 19,
             fontWeight: FontWeight.w600,
+            color: color,
           ),
         ),
       ],

@@ -12,6 +12,8 @@ class TripState extends Equatable {
   final double locationAccuracy; // GPS location accuracy
   final DateTime? lastUpdateTime; // Last GPS update time
   final List<double> recentSpeeds; // Buffer for recent speed values
+  final int availableWaitingTime; // Available waiting time in minutes
+  final int commonTime; // Common time in seconds
 
   const TripState({
     this.distanceKm = 0.0,
@@ -23,8 +25,10 @@ class TripState extends Equatable {
     this.startTime,
     this.speedAccuracy = 0.0,
     this.locationAccuracy = 0.0,
+    this.availableWaitingTime = 2,
     this.lastUpdateTime,
     this.recentSpeeds = const [],
+    this.commonTime = 0,
   });
 
   TripState copyWith({
@@ -39,6 +43,8 @@ class TripState extends Equatable {
     double? locationAccuracy,
     DateTime? lastUpdateTime,
     List<double>? recentSpeeds,
+    int? availableWaitingTime,
+    int? commonTime,
   }) {
     return TripState(
       distanceKm: distanceKm ?? this.distanceKm,
@@ -52,6 +58,8 @@ class TripState extends Equatable {
       locationAccuracy: locationAccuracy ?? this.locationAccuracy,
       lastUpdateTime: lastUpdateTime ?? this.lastUpdateTime,
       recentSpeeds: recentSpeeds ?? this.recentSpeeds,
+      availableWaitingTime: availableWaitingTime ?? this.availableWaitingTime,
+      commonTime: commonTime ?? this.commonTime,
     );
   }
 
@@ -79,5 +87,7 @@ class TripState extends Equatable {
         locationAccuracy,
         lastUpdateTime,
         recentSpeeds,
+        availableWaitingTime,
+        commonTime,
       ];
 }

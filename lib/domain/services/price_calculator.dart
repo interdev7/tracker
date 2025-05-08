@@ -1,7 +1,9 @@
+import 'package:tracker/core/utils/utils.dart';
+
 import '../../core/constants/tracker_properties.dart';
 
 class PriceCalculator {
-  static double calculateTripPrice({
+  static TotalPrice calculateTripPrice({
     required double distanceKm,
     required int waitingTimeSeconds,
     required DateTime? startTime,
@@ -30,7 +32,46 @@ class PriceCalculator {
       }
     }
 
-    // Ensure minimum trip price (20 манат)
-    return totalPrice < properties.minimumTripPrice ? properties.minimumTripPrice : totalPrice;
+    // Если стоимость поездки меньше минимальной стоимости, то устанавливаем минимальную стоимость
+    final movedPrice = totalPrice < properties.minimumTripPrice ? properties.minimumTripPrice : totalPrice;
+
+    return TotalPrice(
+      basePrice: properties.basePrice,
+      movingPrice: totalPrice,
+      tripPrice: movedPrice,
+      availableWaitingTime: calculateAvailableWaitingTime(waitingTimeSeconds, properties.freeWaitingMinutes),
+    );
+  }
+}
+
+class TotalPrice {
+  /// Стоимость подачи
+  double basePrice;
+
+  /// Стоимость движения
+  double movingPrice;
+
+  /// Стоимость поездки
+  double tripPrice;
+
+  /// Оставшееся допустимое время ожидания
+  int availableWaitingTime;
+
+  TotalPrice({
+    required this.basePrice,
+    required this.movingPrice,
+    required this.tripPrice,
+    required this.availableWaitingTime,
+  });
+
+  @override
+  String toString() {
+    return """TotalPrice(
+    basePrice: ${basePrice.toStringAsFixed(2)} манат, 
+    movingPrice: ${movingPrice.toStringAsFixed(2)} манат, 
+    tripPrice: ${tripPrice.toStringAsFixed(2)} манат,
+    availableWaitingTime: ${formatDuration(availableWaitingTime)}
+    )
+    """;
   }
 }

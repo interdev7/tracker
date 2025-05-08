@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:tracker/core/utils/utils.dart';
 import '../../data/repositories/trip_repository.dart';
 import '../../domain/entities/trip_state.dart';
 import '../../core/constants/tracker_properties.dart';
@@ -31,6 +32,10 @@ class TrackerProvider extends ChangeNotifier {
   bool get isMoving => _state.isMoving;
   double get currentSpeed => _state.currentSpeed;
   double get averageSpeed => _state.averageSpeed;
+  int get commonTime => _state.commonTime;
+  bool get hasFreeWaitingTime => _state.waitingTimeSeconds < (_properties.freeWaitingMinutes * 60);
+
+  TripState get state => _state;
 
   TrackerProperties get properties => _properties;
 
@@ -41,6 +46,7 @@ class TrackerProvider extends ChangeNotifier {
 
   // Initialize tracking
   Future<void> initialize() async {
+    await _repository.init();
     final savedState = _repository.loadTripState();
     if (savedState != null) {
       _state = savedState;
@@ -82,6 +88,7 @@ class TrackerProvider extends ChangeNotifier {
       isTracking: false,
       isMoving: false,
       recentSpeeds: [],
+      commonTime: _state.commonTime,
     );
     await _repository.saveTripState(_state);
     notifyListeners();
@@ -116,13 +123,19 @@ class TrackerProvider extends ChangeNotifier {
           double speedKmH = position.speed * 3.6; // Convert m/s to km/h
 
           // Немедленная проверка скорости
+          // Если скорость меньше пороговой, то считаем, что машина не движется
           if (speedKmH < _properties.movementThreshold) {
+            final availableWaitingTime = calculateAvailableWaitingTime(
+              _state.waitingTimeSeconds,
+              _properties.freeWaitingMinutes,
+            );
             _state = _state.copyWith(
               isMoving: false,
               currentSpeed: speedKmH,
               speedAccuracy: position.speedAccuracy,
               locationAccuracy: position.accuracy,
               lastUpdateTime: now,
+              availableWaitingTime: availableWaitingTime,
             );
             await _repository.saveTripState(_state);
             notifyListeners();
@@ -208,7 +221,9 @@ class TrackerProvider extends ChangeNotifier {
     // Таймер для обновления времени
     _timer = Timer.periodic(const Duration(seconds: 1), (_) async {
       if (!_state.isTracking) return;
-
+      _state = _state.copyWith(
+        commonTime: _state.commonTime + 1,
+      );
       final now = DateTime.now();
       final lastUpdate = _state.lastUpdateTime ?? now;
 
