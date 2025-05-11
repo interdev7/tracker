@@ -27,6 +27,7 @@ class TripRepository {
       'locationAccuracy': state.locationAccuracy,
       'lastUpdateTime': state.lastUpdateTime?.toIso8601String(),
       'recentSpeeds': state.recentSpeeds,
+      'commonTime': state.commonTime,
     };
     await _prefs?.setString(_tripStateKey, jsonEncode(stateMap));
   }
@@ -49,6 +50,7 @@ class TripRepository {
       locationAccuracy: stateMap['locationAccuracy'] as double? ?? 0.0,
       lastUpdateTime: stateMap['lastUpdateTime'] != null ? DateTime.parse(stateMap['lastUpdateTime'] as String) : null,
       recentSpeeds: (stateMap['recentSpeeds'] as List<dynamic>?)?.cast<double>() ?? const [],
+      commonTime: (stateMap['commonTime'] ?? 0) as int,
     );
   }
 
